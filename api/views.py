@@ -1,63 +1,171 @@
+import json
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import logout
-from django.contrib.auth.hashers import check_password
-from rest_framework import generics
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.views import APIView
-
-from .models import User
-from .serializers import UserSerializer, LoginSerializer
+from .models import User, Subject
 
 
-class RegisterUserView(generics.CreateAPIView):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
+@csrf_exempt
+def register_user(request):
+    if request.method == "POST":
+        data = json.loads(request.body)
+        username = data.get("username")
+        email = data.get("email")
+        password = data.get("password")
+        full_name = data.get("full_name", "")
 
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            return Response({
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "full_name": user.full_name,
-            }, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if User.objects.filter(username=username).exists():
+            return JsonResponse({"error": "Username already exists"}, status=400)
+
+        user = User.objects.create(
+            username=username,
+            email=email,
+            password_hash=password,
+            full_name=full_name
+        )
+        return JsonResponse({
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "full_name": user.full_name
+        }, status=201)
+
+    return JsonResponse({"error": "Invalid request"}, status=400)
 
 
-@api_view(['POST'])
+@csrf_exempt
 def login_user(request):
-    serializer = LoginSerializer(data=request.data)
-    if serializer.is_valid():
-        username = serializer.validated_data['username']
-        password = serializer.validated_data['password']
+    if request.method == "POST":
+        data = json.loads(request.body)
+        username = data.get("username")
+        password = data.get("password")
 
         try:
             user = User.objects.get(username=username)
         except User.DoesNotExist:
-            return Response({'error': 'Invalid username or password'}, status=status.HTTP_400_BAD_REQUEST)
+            return JsonResponse({"error": "Invalid username or password"}, status=400)
 
-        if not check_password(password, user.password_hash):
-            return Response({'error': 'Invalid username or password'}, status=status.HTTP_400_BAD_REQUEST)
+        if user.password_hash != password:
+            return JsonResponse({"error": "Invalid username or password"}, status=400)
 
-        return Response({'message': 'Login successful', 'user': {'id': user.id, 'username': user.username}})
+        # If you want sessions, you can set a custom session key
+        request.session["user_id"] = user.id
 
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return JsonResponse({"message": "Login successful", "user": {"id": user.id, "username": user.username}})
+
+    return JsonResponse({"error": "Invalid request"}, status=400)
 
 
-class UserDetail(APIView):
-    def get(self, request, user_id):
+def get_user(request, user_id):
+    try:
+        user = User.objects.get(id=user_id)
+        return JsonResponse({
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "full_name": user.full_name
+        })
+    except User.DoesNotExist:
+        return JsonResponse({"error": "User not found"}, status=404)
+
+
+@csrf_exempt
+def logout_view(request):
+    logout(request)  # clears session
+    return JsonResponse({"message": "Logged out successfully"})
+
+
+@csrf_exempt
+def add_subject(request):
+    if request.method == "POST":
         try:
+            data = json.loads(request.body)
+            print("Incoming payload:", data)  # <-- debug log
+            user_id = data.get("user")
             user = User.objects.get(id=user_id)
-            serializer = UserSerializer(user)
-            return Response(serializer.data)
+
+            subject = Subject.objects.create(
+                user=user,
+                category=data.get("category", "Programming"),
+                subject_name=data.get("subject_name"),
+                description=data.get("description", ""),
+                grade=data.get("grade"),
+                semester=data.get("semester", ""),
+                school_year=data.get("school_year", ""),
+            )
+
+            return JsonResponse({
+                "message": "Subject added successfully",
+                "subject": {
+                    "id": subject.id,
+                    "name": subject.subject_name,
+                    "category": subject.category
+                }
+            }, status=201)
         except User.DoesNotExist:
-            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+            return JsonResponse({"error": "User not found"}, status=404)
+        except Exception as e:
+            print("Error:", e)  # <-- debug log
+            return JsonResponse({"error": str(e)}, status=500)
+    return JsonResponse({"error": "Invalid method"}, status=400)
 
 
-class LogoutView(APIView):
-    def post(self, request):
-        logout(request)
-        return Response({"detail": "Successfully logged out."}, status=status.HTTP_200_OK)
+@csrf_exempt
+def get_subjects(request):
+    if request.method == "GET":
+        subjects = Subject.objects.all()
+        data = []
+        for subj in subjects:
+            data.append({
+                "id": subj.id,
+                "user": subj.user.id,
+                "category": subj.category,
+                "subject_name": subj.subject_name,
+                "description": subj.description,
+                "grade": str(subj.grade) if subj.grade else None,
+                "semester": subj.semester,
+                "school_year": subj.school_year
+            })
+        return JsonResponse(data, safe=False)
+    return JsonResponse({"error": "Invalid method"}, status=400)
+
+
+@csrf_exempt
+def edit_subject(request, subject_id):
+    if request.method == "PATCH":  # or PUT
+        try:
+            subject = Subject.objects.get(id=subject_id)
+            data = json.loads(request.body)
+
+            subject.subject_name = data.get("subject_name", subject.subject_name)
+            subject.category = data.get("category", subject.category)
+            subject.description = data.get("description", subject.description)
+            subject.grade = data.get("grade", subject.grade)
+            subject.semester = data.get("semester", subject.semester)
+            subject.school_year = data.get("school_year", subject.school_year)
+            subject.save()
+
+            return JsonResponse({
+                "message": "Subject updated successfully",
+                "subject": {
+                    "id": subject.id,
+                    "subject_name": subject.subject_name,
+                    "category": subject.category,
+                }
+            }, status=200)
+        except Subject.DoesNotExist:
+            return JsonResponse({"error": "Subject not found"}, status=404)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"error": "Invalid method"}, status=400)
+
+
+@csrf_exempt
+def delete_subject(request, id):
+    if request.method == "POST":
+        subject = get_object_or_404(Subject, id=id)
+        subject.delete()
+        return JsonResponse({"success": True})
+    return JsonResponse({"success": False, "error": "Invalid request"})
