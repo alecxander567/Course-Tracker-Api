@@ -32,18 +32,3 @@ Here are a few example endpoints (expand as needed):
 | `/api/courses/`           | GET    | Retrieve all courses             |
 | `/api/grades/`            | POST   | Submit grade data                |
 | `/api/career-suggestions/`| GET    | Get career recommendations       |
-
-## 🧪 Testing
-
-```bash
-# Run unit tests
-python manage.py test
-```
-
-## 📄 License
-
-This project is open-source and available for modification and extension.
-
----
-
-Would you like me to help generate Swagger documentation or Postman collections for the API next?
