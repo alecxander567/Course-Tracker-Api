@@ -4,7 +4,7 @@ from .views import (
     login_user,
     get_user,
     logout_view,
-    add_subject, get_subjects, edit_subject, delete_subject,
+    add_subject, get_subjects, edit_subject, delete_subject, current_user,
 
 )
 
@@ -17,4 +17,6 @@ urlpatterns = [
     path("api/subjects/", get_subjects, name="get-subjects"),
     path("api/subjects/edit/<int:subject_id>/", edit_subject, name="edit-subject"),
     path('delete-subject/<int:id>/', delete_subject, name='delete-subject'),
+    path('api/current_user/', current_user, name='current_user'),
+
 ]

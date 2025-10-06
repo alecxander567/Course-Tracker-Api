@@ -4,6 +4,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import logout
 from .models import User, Subject
+from django.contrib.auth.hashers import make_password, check_password
 
 
 @csrf_exempt
@@ -21,9 +22,10 @@ def register_user(request):
         user = User.objects.create(
             username=username,
             email=email,
-            password_hash=password,
+            password_hash=make_password(password),  # hash password
             full_name=full_name
         )
+
         return JsonResponse({
             "id": user.id,
             "username": user.username,
@@ -46,10 +48,9 @@ def login_user(request):
         except User.DoesNotExist:
             return JsonResponse({"error": "Invalid username or password"}, status=400)
 
-        if user.password_hash != password:
+        if not check_password(password, user.password_hash):
             return JsonResponse({"error": "Invalid username or password"}, status=400)
 
-        # If you want sessions, you can set a custom session key
         request.session["user_id"] = user.id
 
         return JsonResponse({"message": "Login successful", "user": {"id": user.id, "username": user.username}})
@@ -169,3 +170,22 @@ def delete_subject(request, id):
         subject.delete()
         return JsonResponse({"success": True})
     return JsonResponse({"success": False, "error": "Invalid request"})
+
+
+@csrf_exempt
+def current_user(request):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JsonResponse({"error": "Not logged in"}, status=401)
+
+    try:
+        user = User.objects.get(id=user_id)
+        return JsonResponse({
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "full_name": user.full_name
+        })
+    except User.DoesNotExist:
+        return JsonResponse({"error": "User not found"}, status=404)
+
