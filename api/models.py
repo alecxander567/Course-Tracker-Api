@@ -27,6 +27,12 @@ class Subject(models.Model):
         ("Electives", "Electives"),
     ]
 
+    STATUS_CHOICES = [
+        ("Completed", "Completed"),
+        ("Ongoing", "Ongoing"),
+        ("Pending", "Pending"),
+    ]
+
     user = models.ForeignKey('User', on_delete=models.CASCADE, db_column='user_id')
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default="Programming")
     subject_name = models.CharField(max_length=100)
@@ -34,6 +40,7 @@ class Subject(models.Model):
     grade = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
     semester = models.CharField(max_length=20, blank=True, null=True)
     school_year = models.CharField(max_length=20, blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="Pending")
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -42,4 +49,4 @@ class Subject(models.Model):
         managed = True
 
     def __str__(self):
-        return f"{self.subject_name} ({self.category})"
+        return f"{self.subject_name} ({self.category}) - {self.status}"

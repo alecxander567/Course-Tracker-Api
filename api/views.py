@@ -22,7 +22,7 @@ def register_user(request):
         user = User.objects.create(
             username=username,
             email=email,
-            password_hash=make_password(password),  # hash password
+            password_hash=make_password(password),
             full_name=full_name
         )
 
@@ -82,7 +82,7 @@ def add_subject(request):
     if request.method == "POST":
         try:
             data = json.loads(request.body)
-            print("Incoming payload:", data)  # <-- debug log
+            print("Incoming payload:", data)
             user_id = data.get("user")
             user = User.objects.get(id=user_id)
 
@@ -94,6 +94,7 @@ def add_subject(request):
                 grade=data.get("grade"),
                 semester=data.get("semester", ""),
                 school_year=data.get("school_year", ""),
+                status=data.get("status", "Pending"),
             )
 
             return JsonResponse({
@@ -101,13 +102,14 @@ def add_subject(request):
                 "subject": {
                     "id": subject.id,
                     "name": subject.subject_name,
-                    "category": subject.category
+                    "category": subject.category,
+                    "status": subject.status,
                 }
             }, status=201)
         except User.DoesNotExist:
             return JsonResponse({"error": "User not found"}, status=404)
         except Exception as e:
-            print("Error:", e)  # <-- debug log
+            print("Error:", e)  
             return JsonResponse({"error": str(e)}, status=500)
     return JsonResponse({"error": "Invalid method"}, status=400)
 
@@ -126,7 +128,8 @@ def get_subjects(request):
                 "description": subj.description,
                 "grade": str(subj.grade) if subj.grade else None,
                 "semester": subj.semester,
-                "school_year": subj.school_year
+                "school_year": subj.school_year,
+                "status": subj.status,
             })
         return JsonResponse(data, safe=False)
     return JsonResponse({"error": "Invalid method"}, status=400)
@@ -134,7 +137,7 @@ def get_subjects(request):
 
 @csrf_exempt
 def edit_subject(request, subject_id):
-    if request.method == "PATCH":  # or PUT
+    if request.method == "PATCH":
         try:
             subject = Subject.objects.get(id=subject_id)
             data = json.loads(request.body)
@@ -145,6 +148,7 @@ def edit_subject(request, subject_id):
             subject.grade = data.get("grade", subject.grade)
             subject.semester = data.get("semester", subject.semester)
             subject.school_year = data.get("school_year", subject.school_year)
+            subject.status = data.get("status", subject.status)
             subject.save()
 
             return JsonResponse({
@@ -153,6 +157,7 @@ def edit_subject(request, subject_id):
                     "id": subject.id,
                     "subject_name": subject.subject_name,
                     "category": subject.category,
+                    "status": subject.status,
                 }
             }, status=200)
         except Subject.DoesNotExist:
