@@ -73,7 +73,7 @@ def get_user(request, user_id):
 
 @csrf_exempt
 def logout_view(request):
-    logout(request)  # clears session
+    logout(request)  
     return JsonResponse({"message": "Logged out successfully"})
 
 
