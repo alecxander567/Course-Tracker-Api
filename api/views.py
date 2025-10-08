@@ -1,10 +1,22 @@
 import json
+
+from django.db.models import Avg
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import logout
+
 from .models import User, Subject
 from django.contrib.auth.hashers import make_password, check_password
+
+
+CAREER_MAPPING = {
+    "Programming": "Software Developer",
+    "Database": "Database Administrator",
+    "Networking": "Cloud Architect",
+    "Security": "Cybersecurity Specialist",
+    "Electives": "System Analyst",
+}
 
 
 @csrf_exempt
@@ -69,12 +81,6 @@ def get_user(request, user_id):
         })
     except User.DoesNotExist:
         return JsonResponse({"error": "User not found"}, status=404)
-
-
-@csrf_exempt
-def logout_view(request):
-    logout(request)  
-    return JsonResponse({"message": "Logged out successfully"})
 
 
 @csrf_exempt
@@ -193,4 +199,44 @@ def current_user(request):
         })
     except User.DoesNotExist:
         return JsonResponse({"error": "User not found"}, status=404)
+
+
+@csrf_exempt
+def career_recommendation(request):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JsonResponse({"error": "User not authenticated"}, status=401)
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "User not found"}, status=404)
+
+    category_grades = (
+        Subject.objects
+        .filter(user=user, grade__isnull=False)
+        .values("category")
+        .annotate(avg_grade=Avg("grade"))
+    )
+
+    if not category_grades:
+        return JsonResponse(
+            {"message": "No graded subjects available", "recommendation": None, "category_average_grades": {}})
+
+    category_avg = {item["category"]: float(item["avg_grade"]) for item in category_grades}
+    best_category = max(category_avg, key=category_avg.get)
+    recommended_career = CAREER_MAPPING.get(best_category, "General IT")
+
+    data = {
+        "category_average_grades": category_avg,
+        "best_category": best_category,
+        "recommended_career": recommended_career,
+    }
+    return JsonResponse(data)
+
+
+@csrf_exempt
+def logout_view(request):
+    logout(request)
+    return JsonResponse({"message": "Logged out successfully"})
 
