@@ -4,7 +4,8 @@ from .views import (
     login_user,
     get_user,
     logout_view,
-    add_subject, get_subjects, edit_subject, delete_subject, current_user, career_recommendation,
+    add_subject, get_subjects, edit_subject, delete_subject, current_user, career_recommendation, create_note,
+    get_notes, edit_note, delete_note,
 )
 
 urlpatterns = [
@@ -18,4 +19,9 @@ urlpatterns = [
     path('delete-subject/<int:id>/', delete_subject, name='delete-subject'),
     path('api/current_user/', current_user, name='current_user'),
     path('api/career_recommendation/', career_recommendation, name='career_recommendation'),
+    path('api/notes/', create_note, name='create_note'),
+    path("api/notes/fetch/", get_notes, name="get_notes"),
+    path("api/notes/edit/<int:note_id>/", edit_note, name="edit_note"),
+    path("api/notes/delete/<int:note_id>/", delete_note, name="delete_note"),
+
 ]

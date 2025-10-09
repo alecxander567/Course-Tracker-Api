@@ -1,12 +1,12 @@
 import json
 
-from django.db.models import Avg
+from django.db.models import Avg, Prefetch
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import logout
 
-from .models import User, Subject
+from .models import User, Subject, Note
 from django.contrib.auth.hashers import make_password, check_password
 
 
@@ -233,6 +233,113 @@ def career_recommendation(request):
         "recommended_career": recommended_career,
     }
     return JsonResponse(data)
+
+
+@csrf_exempt
+def create_note(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
+
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JsonResponse({"success": False, "message": "User not authenticated"}, status=401)
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"success": False, "message": "User not found"}, status=404)
+
+    try:
+        data = json.loads(request.body)
+        title = data.get("title")
+        content = data.get("content")
+        subject_id = data.get("subject")
+
+        subject = Subject.objects.get(id=subject_id, user=user)
+
+        note = Note.objects.create(
+            title=title,
+            content=content,
+            subject=subject,
+            user=user
+        )
+
+        return JsonResponse({
+            "success": True,
+            "message": "Note created successfully",
+            "note": {"id": note.id, "title": note.title, "content": note.content}
+        })
+
+    except Subject.DoesNotExist:
+        return JsonResponse({"success": False, "message": "Invalid subject"}, status=400)
+    except Exception as e:
+        return JsonResponse({"success": False, "message": str(e)}, status=500)
+
+
+def get_notes(request):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JsonResponse({"success": False, "message": "User not authenticated"}, status=401)
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"success": False, "message": "User not found"}, status=404)
+
+    subjects = Subject.objects.filter(user=user).prefetch_related(
+        Prefetch('notes', queryset=Note.objects.order_by('-created_at'))
+    )
+
+    data = []
+    for subject in subjects:
+        data.append({
+            "subject_id": subject.id,
+            "subject_name": subject.subject_name,
+            "notes": [{"id": n.id, "title": n.title, "content": n.content} for n in subject.notes.all()]
+        })
+
+    return JsonResponse(data, safe=False)
+
+
+@csrf_exempt
+def edit_note(request, note_id):
+    if request.method != "PATCH":
+        return JsonResponse({"error": "Invalid request method"}, status=400)
+
+    try:
+        note = Note.objects.get(id=note_id)
+    except Note.DoesNotExist:
+        return JsonResponse({"error": "Note not found"}, status=404)
+
+    try:
+        data = json.loads(request.body)
+        title = data.get("title", note.title)
+        content = data.get("content", note.content)
+
+        note.title = title
+        note.content = content
+        note.save()
+
+        return JsonResponse({
+            "id": note.id,
+            "title": note.title,
+            "content": note.content,
+        })
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)
+
+
+@csrf_exempt
+def delete_note(request, note_id):
+    if request.method != "DELETE":
+        return JsonResponse({"error": "Invalid request method"}, status=400)
+
+    try:
+        note = Note.objects.get(id=note_id)
+        note.delete()
+        return JsonResponse({"success": True})
+    except Note.DoesNotExist:
+        return JsonResponse({"error": "Note not found"}, status=404)
 
 
 @csrf_exempt
