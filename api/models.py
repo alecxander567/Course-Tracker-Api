@@ -6,7 +6,6 @@ class User(models.Model):
     email = models.CharField(max_length=100, unique=True)
     password_hash = models.CharField(max_length=255)
     full_name = models.CharField(max_length=100, blank=True, null=True)
-    profile_pic = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -58,7 +57,7 @@ class Note(models.Model):
     title = models.CharField(max_length=150)
     content = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)      
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'notes'
@@ -66,3 +65,21 @@ class Note(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', db_column='user_id')
+    profile_pic = models.CharField(max_length=255, blank=True, null=True)
+    address = models.CharField(max_length=255, blank=True, null=True)
+    school = models.CharField(max_length=150, blank=True, null=True)
+    course = models.CharField(max_length=150, blank=True, null=True)
+    bio = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'user_profiles'
+        managed = True
+
+    def __str__(self):
+        return f"{self.user.username}'s Profile"

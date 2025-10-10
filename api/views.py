@@ -1,4 +1,5 @@
 import json
+import os
 
 from django.db.models import Avg, Prefetch
 from django.http import JsonResponse
@@ -6,7 +7,8 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import logout
 
-from .models import User, Subject, Note
+from backend import settings
+from .models import User, Subject, Note, UserProfile
 from django.contrib.auth.hashers import make_password, check_password
 
 
@@ -340,6 +342,84 @@ def delete_note(request, note_id):
         return JsonResponse({"success": True})
     except Note.DoesNotExist:
         return JsonResponse({"error": "Note not found"}, status=404)
+
+
+@csrf_exempt
+def profile_view(request, user_id):
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"success": False, "message": "User not found"}, status=404)
+
+    if request.method == "GET":
+        try:
+            profile = user.profile
+        except UserProfile.DoesNotExist:
+            profile = UserProfile.objects.create(user=user)
+
+        return JsonResponse({
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "full_name": user.full_name or "",
+            },
+            "profile": {
+                "profile_pic": profile.profile_pic or "",
+                "address": profile.address or "",
+                "school": profile.school or "",
+                "course": profile.course or "",
+                "bio": profile.bio or "",
+            }
+        })
+
+    elif request.method == "POST":
+        data = request.POST
+        file = request.FILES.get("profile_pic")
+
+        user.username = data.get("username", user.username)
+        user.email = data.get("email", user.email)
+        user.full_name = data.get("full_name", user.full_name or "")
+        user.save()
+
+        profile, created = UserProfile.objects.get_or_create(user=user)
+        profile.address = data.get("address", profile.address or "")
+        profile.school = data.get("school", profile.school or "")
+        profile.course = data.get("course", profile.course or "")
+        profile.bio = data.get("bio", profile.bio or "")
+
+        if file:
+            media_dir = os.path.join(settings.BASE_DIR, 'media', 'profile_pics')
+            os.makedirs(media_dir, exist_ok=True)
+
+            filename = f"{user.id}_{file.name}"
+            filepath = os.path.join(media_dir, filename)
+
+            with open(filepath, 'wb+') as f:
+                for chunk in file.chunks():
+                    f.write(chunk)
+
+            profile.profile_pic = f"/media/profile_pics/{filename}"
+
+        profile.save()
+
+        return JsonResponse({
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "full_name": user.full_name or "",
+            },
+            "profile": {
+                "profile_pic": profile.profile_pic or "",
+                "address": profile.address or "",
+                "school": profile.school or "",
+                "course": profile.course or "",
+                "bio": profile.bio or "",
+            }
+        })
+    else:
+        return JsonResponse({"success": False, "message": "Method not allowed"}, status=405)
 
 
 @csrf_exempt

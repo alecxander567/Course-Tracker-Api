@@ -5,7 +5,7 @@ from .views import (
     get_user,
     logout_view,
     add_subject, get_subjects, edit_subject, delete_subject, current_user, career_recommendation, create_note,
-    get_notes, edit_note, delete_note,
+    get_notes, edit_note, delete_note, profile_view,
 )
 
 urlpatterns = [
@@ -23,5 +23,5 @@ urlpatterns = [
     path("api/notes/fetch/", get_notes, name="get_notes"),
     path("api/notes/edit/<int:note_id>/", edit_note, name="edit_note"),
     path("api/notes/delete/<int:note_id>/", delete_note, name="delete_note"),
-
+    path('profile/<int:user_id>/', profile_view, name='profile'),
 ]
