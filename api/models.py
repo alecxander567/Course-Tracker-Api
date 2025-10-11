@@ -83,3 +83,30 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.username}'s Profile"
+
+
+class Project(models.Model):
+    STATUS_CHOICES = [
+        ('NOT_STARTED', 'Not Started'),
+        ('IN_PROGRESS', 'In Progress'),
+        ('COMPLETED', 'Completed'),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='projects',
+        db_column='user_id'
+    )
+    title = models.CharField(max_length=150)
+    description = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='NOT_STARTED')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'projects'
+        managed = True
+
+    def __str__(self):
+        return self.title

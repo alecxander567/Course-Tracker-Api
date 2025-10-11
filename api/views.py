@@ -8,7 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import logout
 
 from backend import settings
-from .models import User, Subject, Note, UserProfile
+from .models import User, Subject, Note, UserProfile, Project
 from django.contrib.auth.hashers import make_password, check_password
 
 
@@ -420,6 +420,152 @@ def profile_view(request, user_id):
         })
     else:
         return JsonResponse({"success": False, "message": "Method not allowed"}, status=405)
+
+
+@csrf_exempt
+def add_project(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
+
+    # Get user_id from session
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JsonResponse({"success": False, "message": "User not authenticated"}, status=401)
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"success": False, "message": "User not found"}, status=404)
+
+    try:
+        data = json.loads(request.body)
+        title = data.get("title")
+        description = data.get("description", "")
+        status = data.get("status", "NOT_STARTED")
+
+        project = Project.objects.create(
+            user=user,
+            title=title,
+            description=description,
+            status=status
+        )
+
+        return JsonResponse({
+            "success": True,
+            "message": "Project created successfully",
+            "project": {
+                "id": project.id,
+                "title": project.title,
+                "description": project.description,
+                "status": project.status,
+                "created_at": project.created_at,
+                "updated_at": project.updated_at
+            }
+        }, status=201)
+
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "message": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({"success": False, "message": str(e)}, status=500)
+
+
+@csrf_exempt
+def get_projects(request):
+    if request.method != "GET":
+        return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
+
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JsonResponse({"success": False, "message": "User not authenticated"}, status=401)
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"success": False, "message": "User not found"}, status=404)
+
+    projects = Project.objects.filter(user=user).order_by('-created_at')
+    data = [
+        {
+            "id": project.id,
+            "title": project.title,
+            "description": project.description,
+            "status": project.status,
+            "created_at": project.created_at,
+            "updated_at": project.updated_at
+        }
+        for project in projects
+    ]
+
+    return JsonResponse({"success": True, "projects": data})
+
+
+@csrf_exempt
+def edit_project(request, project_id):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
+
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JsonResponse({"success": False, "message": "User not authenticated"}, status=401)
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"success": False, "message": "User not found"}, status=404)
+
+    try:
+        project = Project.objects.get(id=project_id, user=user)
+    except Project.DoesNotExist:
+        return JsonResponse({"success": False, "message": "Project not found"}, status=404)
+
+    try:
+        data = json.loads(request.body)
+        title = data.get("title", project.title)
+        description = data.get("description", project.description)
+        status = data.get("status", project.status)
+
+        project.title = title
+        project.description = description
+        project.status = status
+        project.save()
+
+        return JsonResponse({
+            "success": True,
+            "message": "Project updated successfully",
+            "project": {
+                "id": project.id,
+                "title": project.title,
+                "description": project.description,
+                "status": project.status
+            }
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "message": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({"success": False, "message": str(e)}, status=500)
+
+
+@csrf_exempt
+def delete_project(request, project_id):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
+
+    # Check user authentication
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JsonResponse({"success": False, "message": "User not authenticated"}, status=401)
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"success": False, "message": "User not found"}, status=404)
+
+    try:
+        project = Project.objects.get(id=project_id, user=user)
+        project.delete()
+        return JsonResponse({"success": True, "message": "Project deleted successfully"})
+    except Project.DoesNotExist:
+        return JsonResponse({"success": False, "message": "Project not found"}, status=404)
 
 
 @csrf_exempt
