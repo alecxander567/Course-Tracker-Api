@@ -4,11 +4,12 @@ import os
 from django.db.models import Avg, Prefetch
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import logout
 
 from backend import settings
-from .models import User, Subject, Note, UserProfile, Project
+from .models import User, Subject, Note, UserProfile, Project, Status
 from django.contrib.auth.hashers import make_password, check_password
 
 
@@ -91,7 +92,11 @@ def add_subject(request):
         try:
             data = json.loads(request.body)
             print("Incoming payload:", data)
-            user_id = data.get("user")
+
+            user_id = request.session.get("user_id")
+            if not user_id:
+                return JsonResponse({"error": "User not authenticated"}, status=401)
+
             user = User.objects.get(id=user_id)
 
             subject = Subject.objects.create(
@@ -117,7 +122,7 @@ def add_subject(request):
         except User.DoesNotExist:
             return JsonResponse({"error": "User not found"}, status=404)
         except Exception as e:
-            print("Error:", e)  
+            print("Error:", e)
             return JsonResponse({"error": str(e)}, status=500)
     return JsonResponse({"error": "Invalid method"}, status=400)
 
@@ -125,7 +130,17 @@ def add_subject(request):
 @csrf_exempt
 def get_subjects(request):
     if request.method == "GET":
-        subjects = Subject.objects.all()
+        user_id = request.session.get("user_id")
+        if not user_id:
+            return JsonResponse({"error": "User not authenticated"}, status=401)
+
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return JsonResponse({"error": "User not found"}, status=404)
+
+        subjects = Subject.objects.filter(user=user)
+
         data = []
         for subj in subjects:
             data.append({
@@ -427,7 +442,6 @@ def add_project(request):
     if request.method != "POST":
         return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
 
-    # Get user_id from session
     user_id = request.session.get("user_id")
     if not user_id:
         return JsonResponse({"success": False, "message": "User not authenticated"}, status=401)
@@ -550,7 +564,6 @@ def delete_project(request, project_id):
     if request.method != "POST":
         return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
 
-    # Check user authentication
     user_id = request.session.get("user_id")
     if not user_id:
         return JsonResponse({"success": False, "message": "User not authenticated"}, status=401)
@@ -566,6 +579,164 @@ def delete_project(request, project_id):
         return JsonResponse({"success": True, "message": "Project deleted successfully"})
     except Project.DoesNotExist:
         return JsonResponse({"success": False, "message": "Project not found"}, status=404)
+
+
+@csrf_exempt
+def add_status(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
+
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JsonResponse({"success": False, "message": "User not authenticated"}, status=401)
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"success": False, "message": "User not found"}, status=404)
+
+    try:
+        data = json.loads(request.body)
+        title = data.get("title")
+        description = data.get("description", "")
+        status_value = data.get("status", "ONGOING")
+        date_value = data.get("date", timezone.now().date())
+
+        if status_value not in dict(Status.STATUS_CHOICES):
+            return JsonResponse({"success": False, "message": "Invalid status value"}, status=400)
+
+        new_status = Status.objects.create(
+            user=user,
+            title=title,
+            description=description,
+            status=status_value,
+            date=date_value
+        )
+
+        return JsonResponse({
+            "success": True,
+            "message": "Status created successfully",
+            "status": {
+                "id": new_status.id,
+                "title": new_status.title,
+                "description": new_status.description,
+                "status": new_status.status,
+                "date": str(new_status.date),
+                "created_at": str(new_status.created_at),
+                "updated_at": str(new_status.updated_at)
+            }
+        }, status=201)
+
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "message": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({"success": False, "message": str(e)}, status=500)
+
+
+@csrf_exempt
+def get_statuses(request):
+    if request.method != "GET":
+        return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
+
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JsonResponse({"success": False, "message": "User not authenticated"}, status=401)
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"success": False, "message": "User not found"}, status=404)
+
+    try:
+        statuses = Status.objects.filter(user=user).order_by("-created_at")
+        statuses_data = [
+            {
+                "id": s.id,
+                "title": s.title,
+                "description": s.description,
+                "status": s.status,
+                "date": str(s.date),
+                "created_at": str(s.created_at),
+                "updated_at": str(s.updated_at),
+            }
+            for s in statuses
+        ]
+
+        return JsonResponse({"success": True, "statuses": statuses_data}, status=200)
+    except Exception as e:
+        return JsonResponse({"success": False, "message": str(e)}, status=500)
+
+
+@csrf_exempt
+def edit_status(request, status_id):
+    if request.method != "PUT":
+        return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
+
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JsonResponse({"success": False, "message": "User not authenticated"}, status=401)
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"success": False, "message": "User not found"}, status=404)
+
+    try:
+        status_obj = Status.objects.get(id=status_id, user=user)
+    except Status.DoesNotExist:
+        return JsonResponse({"success": False, "message": "Status not found"}, status=404)
+
+    try:
+        data = json.loads(request.body)
+        status_obj.title = data.get("title", status_obj.title)
+        status_obj.description = data.get("description", status_obj.description)
+        status_obj.status = data.get("status", status_obj.status)
+        status_obj.date = data.get("date", status_obj.date)
+        status_obj.updated_at = timezone.now()
+        status_obj.save()
+
+        return JsonResponse({
+            "success": True,
+            "message": "Status updated successfully",
+            "status": {
+                "id": status_obj.id,
+                "title": status_obj.title,
+                "description": status_obj.description,
+                "status": status_obj.status,
+                "date": str(status_obj.date),
+                "created_at": str(status_obj.created_at),
+                "updated_at": str(status_obj.updated_at),
+            }
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "message": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({"success": False, "message": str(e)}, status=500)
+
+
+@csrf_exempt
+def delete_status(request, status_id):
+    if request.method != "DELETE":
+        return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
+
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JsonResponse({"success": False, "message": "User not authenticated"}, status=401)
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"success": False, "message": "User not found"}, status=404)
+
+    try:
+        status_obj = Status.objects.get(id=status_id, user=user)
+        status_obj.delete()
+        return JsonResponse({"success": True, "message": "Status deleted successfully"}, status=200)
+    except Status.DoesNotExist:
+        return JsonResponse({"success": False, "message": "Status not found"}, status=404)
+    except Exception as e:
+        return JsonResponse({"success": False, "message": str(e)}, status=500)
 
 
 @csrf_exempt

@@ -6,6 +6,7 @@ from .views import (
     logout_view,
     add_subject, get_subjects, edit_subject, delete_subject, current_user, career_recommendation, create_note,
     get_notes, edit_note, delete_note, profile_view, add_project, get_projects, edit_project, delete_project,
+    add_status, get_statuses, edit_status, delete_status
 )
 
 urlpatterns = [
@@ -28,4 +29,9 @@ urlpatterns = [
     path("api/projects/", get_projects, name="get_projects"),
     path("api/projects/edit/<int:project_id>/", edit_project, name="edit_project"),
     path("api/projects/delete/<int:project_id>/", delete_project, name="delete_project"),
+    path("api/statuses/add/", add_status, name="add_status"),
+    path('api/statuses/', get_statuses, name='get_statuses'),
+    path('api/statuses/edit/<int:status_id>/', edit_status, name='edit_status'),
+    path('api/statuses/delete/<int:status_id>/', delete_status, name='delete_status'),
+
 ]

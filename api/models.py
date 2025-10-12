@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 
+
 class User(models.Model):
     username = models.CharField(max_length=50, unique=True)
     email = models.CharField(max_length=100, unique=True)
@@ -110,3 +111,32 @@ class Project(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class Status(models.Model):
+    STATUS_CHOICES = [
+        ("ONGOING", "Ongoing"),
+        ("COMPLETED", "Completed"),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="statuses",
+        db_column="user_id",
+        to_field="id"
+    )
+
+    title = models.CharField(max_length=150)
+    description = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="ONGOING")
+    date = models.DateField(default=timezone.now)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "statuses"
+        managed = True
+
+    def __str__(self):
+        return f"{self.title} - {self.status}"
