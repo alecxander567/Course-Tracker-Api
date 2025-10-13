@@ -33,5 +33,4 @@ urlpatterns = [
     path('api/statuses/', get_statuses, name='get_statuses'),
     path('api/statuses/edit/<int:status_id>/', edit_status, name='edit_status'),
     path('api/statuses/delete/<int:status_id>/', delete_status, name='delete_status'),
-
 ]
