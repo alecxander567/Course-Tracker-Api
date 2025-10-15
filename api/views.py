@@ -91,7 +91,6 @@ def add_subject(request):
     if request.method == "POST":
         try:
             data = json.loads(request.body)
-            print("Incoming payload:", data)
 
             user_id = request.session.get("user_id")
             if not user_id:
@@ -108,54 +107,68 @@ def add_subject(request):
                 semester=data.get("semester", ""),
                 school_year=data.get("school_year", ""),
                 status=data.get("status", "Pending"),
+                priority=data.get("priority", "MODERATE"),
             )
 
             return JsonResponse({
                 "message": "Subject added successfully",
                 "subject": {
                     "id": subject.id,
-                    "name": subject.subject_name,
+                    "subject_name": subject.subject_name,
                     "category": subject.category,
                     "status": subject.status,
+                    "priority": subject.priority,
                 }
             }, status=201)
         except User.DoesNotExist:
             return JsonResponse({"error": "User not found"}, status=404)
         except Exception as e:
-            print("Error:", e)
             return JsonResponse({"error": str(e)}, status=500)
     return JsonResponse({"error": "Invalid method"}, status=400)
 
 
 @csrf_exempt
 def get_subjects(request):
-    if request.method == "GET":
-        user_id = request.session.get("user_id")
-        if not user_id:
-            return JsonResponse({"error": "User not authenticated"}, status=401)
+    if request.method != "GET":
+        return JsonResponse({"error": "Invalid method"}, status=400)
 
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return JsonResponse({"error": "User not found"}, status=404)
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JsonResponse({"error": "User not authenticated"}, status=401)
 
-        subjects = Subject.objects.filter(user=user)
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "User not found"}, status=404)
 
-        data = []
-        for subj in subjects:
-            data.append({
-                "id": subj.id,
-                "user": subj.user.id,
-                "category": subj.category,
-                "subject_name": subj.subject_name,
-                "description": subj.description,
-                "grade": str(subj.grade) if subj.grade else None,
-                "semester": subj.semester,
-                "school_year": subj.school_year,
-                "status": subj.status,
+    subjects = Subject.objects.filter(user=user).prefetch_related('notes')
+
+    data = []
+    for subj in subjects:
+        notes_list = []
+        for note in subj.notes.all():
+            notes_list.append({
+                "id": note.id,
+                "title": note.title,
+                "content": note.content,
+                "created_at": note.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             })
-        return JsonResponse(data, safe=False)
-    return JsonResponse({"error": "Invalid method"}, status=400)
+
+        data.append({
+            "id": subj.id,
+            "user": subj.user.id,
+            "category": subj.category,
+            "subject_name": subj.subject_name,
+            "description": subj.description,
+            "grade": str(subj.grade) if subj.grade else None,
+            "semester": subj.semester,
+            "school_year": subj.school_year,
+            "status": subj.status,
+            "priority": subj.priority,
+            "notes": notes_list
+        })
+
+    return JsonResponse({"success": True, "subjects": data})
 
 
 @csrf_exempt
@@ -172,6 +185,7 @@ def edit_subject(request, subject_id):
             subject.semester = data.get("semester", subject.semester)
             subject.school_year = data.get("school_year", subject.school_year)
             subject.status = data.get("status", subject.status)
+            subject.priority = data.get("priority", subject.priority)
             subject.save()
 
             return JsonResponse({
@@ -181,6 +195,7 @@ def edit_subject(request, subject_id):
                     "subject_name": subject.subject_name,
                     "category": subject.category,
                     "status": subject.status,
+                    "priority": subject.priority,
                 }
             }, status=200)
         except Subject.DoesNotExist:
