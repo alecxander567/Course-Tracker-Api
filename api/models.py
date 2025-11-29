@@ -1,8 +1,9 @@
 from django.db import models
 from django.utils import timezone
-
+from django.utils.translation import gettext_lazy as _
 
 class User(models.Model):
+    id = models.AutoField(primary_key=True)
     username = models.CharField(max_length=50, unique=True)
     email = models.CharField(max_length=100, unique=True)
     password_hash = models.CharField(max_length=255)
@@ -47,7 +48,7 @@ class Subject(models.Model):
     semester = models.CharField(max_length=20, blank=True, null=True)
     school_year = models.CharField(max_length=20, blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="Pending")
-    priority = models.CharField(   # <-- New field
+    priority = models.CharField(
         max_length=10,
         choices=PRIORITY_LEVELS,
         default="MODERATE"
@@ -124,32 +125,69 @@ class Project(models.Model):
         return self.title
 
 
-class Status(models.Model):
-    STATUS_CHOICES = [
-        ("ONGOING", "Ongoing"),
-        ("COMPLETED", "Completed"),
-    ]
+class TodoList(models.Model):
+    id = models.AutoField(primary_key=True)
+
+    class Status(models.TextChoices):
+        ONGOING = "ONGOING", _("Ongoing")
+        COMPLETED = "COMPLETED", _("Completed")
 
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name="statuses",
-        db_column="user_id",
-        to_field="id"
+        related_name="todo_lists",
+        db_column="user_id"
     )
-
-    title = models.CharField(max_length=150)
-    description = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="ONGOING")
-    date = models.DateField(default=timezone.now)
+    title = models.CharField(max_length=150, help_text="Name of the todo list")
+    description = models.TextField(blank=True, null=True, help_text="Optional description of the list")
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.ONGOING,
+        help_text="Status of the todo list based on tasks completion"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "statuses"
+        db_table = "todo_lists"
         managed = True
+        ordering = ['-created_at']
+        verbose_name = "Todo List"
+        verbose_name_plural = "Todo Lists"
 
     def __str__(self):
-        return f"{self.title} - {self.status}"
+        return f"{self.title} ({self.user.username})"
 
 
+class Task(models.Model):
+    id = models.AutoField(primary_key=True)
+
+    todo_list = models.ForeignKey(
+        TodoList,
+        on_delete=models.CASCADE,
+        related_name="tasks",
+        help_text="The todo list this task belongs to"
+    )
+
+    label = models.CharField(max_length=255, help_text="Task description")
+    completed = models.BooleanField(default=False, help_text="Whether the task is completed")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "tasks"
+        managed = True
+        ordering = ['created_at']
+        verbose_name = "Task"
+        verbose_name_plural = "Tasks"
+
+    def __str__(self):
+        status = "✓" if self.completed else "○"
+        return f"{status} {self.label}"
+
+    def toggle_completion(self):
+        self.completed = not self.completed
+        self.save()
+        self.todo_list.update_status()
+        return self.completed

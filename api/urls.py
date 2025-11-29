@@ -1,3 +1,4 @@
+from django.contrib.auth import views
 from django.urls import path
 from .views import (
     register_user,
@@ -6,7 +7,7 @@ from .views import (
     logout_view,
     add_subject, get_subjects, edit_subject, delete_subject, current_user, career_recommendation, create_note,
     get_notes, edit_note, delete_note, profile_view, add_project, get_projects, edit_project, delete_project,
-    add_status, get_statuses, edit_status, delete_status
+    delete_task, add_task, toggle_task, get_todo_lists, add_todo_list, edit_todo_list, delete_todo_list
 )
 
 urlpatterns = [
@@ -29,8 +30,11 @@ urlpatterns = [
     path("api/projects/", get_projects, name="get_projects"),
     path("api/projects/edit/<int:project_id>/", edit_project, name="edit_project"),
     path("api/projects/delete/<int:project_id>/", delete_project, name="delete_project"),
-    path("api/statuses/add/", add_status, name="add_status"),
-    path('api/statuses/', get_statuses, name='get_statuses'),
-    path('api/statuses/edit/<int:status_id>/', edit_status, name='edit_status'),
-    path('api/statuses/delete/<int:status_id>/', delete_status, name='delete_status'),
+    path('api/tasks/add/<int:list_id>/', add_task, name='add_task'),
+    path('api/tasks/toggle/<int:task_id>/', toggle_task, name='toggle_task'),
+    path('api/tasks/delete/<int:task_id>/', delete_task, name='delete_task'),
+    path('api/statuses/', get_todo_lists, name='get_todo_lists'),
+    path('api/statuses/add/', add_todo_list, name='add_todo_list'),
+    path('api/statuses/edit/<int:list_id>/', edit_todo_list, name='edit_todo_list'),
+    path('api/statuses/delete/<int:list_id>/', delete_todo_list, name='delete_todo_list'),
 ]

@@ -9,7 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import logout
 
 from backend import settings
-from .models import User, Subject, Note, UserProfile, Project, Status
+from .models import User, Subject, Note, UserProfile, Project, Task, TodoList
 from django.contrib.auth.hashers import make_password, check_password
 
 
@@ -597,7 +597,7 @@ def delete_project(request, project_id):
 
 
 @csrf_exempt
-def add_status(request):
+def add_todo_list(request):
     if request.method != "POST":
         return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
 
@@ -614,31 +614,26 @@ def add_status(request):
         data = json.loads(request.body)
         title = data.get("title")
         description = data.get("description", "")
-        status_value = data.get("status", "ONGOING")
-        date_value = data.get("date", timezone.now().date())
 
-        if status_value not in dict(Status.STATUS_CHOICES):
-            return JsonResponse({"success": False, "message": "Invalid status value"}, status=400)
+        if not title:
+            return JsonResponse({"success": False, "message": "Title is required"}, status=400)
 
-        new_status = Status.objects.create(
+        new_list = TodoList.objects.create(
             user=user,
             title=title,
-            description=description,
-            status=status_value,
-            date=date_value
+            description=description
         )
 
         return JsonResponse({
             "success": True,
-            "message": "Status created successfully",
+            "message": "Todo list created successfully",
             "status": {
-                "id": new_status.id,
-                "title": new_status.title,
-                "description": new_status.description,
-                "status": new_status.status,
-                "date": str(new_status.date),
-                "created_at": str(new_status.created_at),
-                "updated_at": str(new_status.updated_at)
+                "id": new_list.id,
+                "title": new_list.title,
+                "description": new_list.description,
+                "created_at": str(new_list.created_at),
+                "updated_at": str(new_list.updated_at),
+                "tasks": []
             }
         }, status=201)
 
@@ -649,7 +644,7 @@ def add_status(request):
 
 
 @csrf_exempt
-def get_statuses(request):
+def get_todo_lists(request):
     if request.method != "GET":
         return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
 
@@ -663,27 +658,36 @@ def get_statuses(request):
         return JsonResponse({"success": False, "message": "User not found"}, status=404)
 
     try:
-        statuses = Status.objects.filter(user=user).order_by("-created_at")
-        statuses_data = [
-            {
-                "id": s.id,
-                "title": s.title,
-                "description": s.description,
-                "status": s.status,
-                "date": str(s.date),
-                "created_at": str(s.created_at),
-                "updated_at": str(s.updated_at),
-            }
-            for s in statuses
-        ]
+        todo_lists = TodoList.objects.filter(user=user).order_by("-created_at")
+        lists_data = []
 
-        return JsonResponse({"success": True, "statuses": statuses_data}, status=200)
+        for todo_list in todo_lists:
+            lists_data.append({
+                "id": todo_list.id,
+                "title": todo_list.title,
+                "description": todo_list.description,
+                "created_at": str(todo_list.created_at),
+                "updated_at": str(todo_list.updated_at),
+                "tasks": [
+                    {
+                        "id": task.id,
+                        "label": task.label,
+                        "completed": task.completed,
+                    }
+                    for task in todo_list.tasks.all()
+                ]
+            })
+
+        return JsonResponse({
+            "success": True,
+            "statuses": lists_data
+        }, status=200)
     except Exception as e:
         return JsonResponse({"success": False, "message": str(e)}, status=500)
 
 
 @csrf_exempt
-def edit_status(request, status_id):
+def edit_todo_list(request, list_id):
     if request.method != "PUT":
         return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
 
@@ -697,30 +701,25 @@ def edit_status(request, status_id):
         return JsonResponse({"success": False, "message": "User not found"}, status=404)
 
     try:
-        status_obj = Status.objects.get(id=status_id, user=user)
-    except Status.DoesNotExist:
-        return JsonResponse({"success": False, "message": "Status not found"}, status=404)
+        todo_list = TodoList.objects.get(id=list_id, user=user)
+    except TodoList.DoesNotExist:
+        return JsonResponse({"success": False, "message": "Todo list not found"}, status=404)
 
     try:
         data = json.loads(request.body)
-        status_obj.title = data.get("title", status_obj.title)
-        status_obj.description = data.get("description", status_obj.description)
-        status_obj.status = data.get("status", status_obj.status)
-        status_obj.date = data.get("date", status_obj.date)
-        status_obj.updated_at = timezone.now()
-        status_obj.save()
+        todo_list.title = data.get("title", todo_list.title)
+        todo_list.description = data.get("description", todo_list.description)
+        todo_list.save()
 
         return JsonResponse({
             "success": True,
-            "message": "Status updated successfully",
+            "message": "Todo list updated successfully",
             "status": {
-                "id": status_obj.id,
-                "title": status_obj.title,
-                "description": status_obj.description,
-                "status": status_obj.status,
-                "date": str(status_obj.date),
-                "created_at": str(status_obj.created_at),
-                "updated_at": str(status_obj.updated_at),
+                "id": todo_list.id,
+                "title": todo_list.title,
+                "description": todo_list.description,
+                "created_at": str(todo_list.created_at),
+                "updated_at": str(todo_list.updated_at),
             }
         })
 
@@ -731,7 +730,7 @@ def edit_status(request, status_id):
 
 
 @csrf_exempt
-def delete_status(request, status_id):
+def delete_todo_list(request, list_id):
     if request.method != "DELETE":
         return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
 
@@ -745,11 +744,98 @@ def delete_status(request, status_id):
         return JsonResponse({"success": False, "message": "User not found"}, status=404)
 
     try:
-        status_obj = Status.objects.get(id=status_id, user=user)
-        status_obj.delete()
-        return JsonResponse({"success": True, "message": "Status deleted successfully"}, status=200)
-    except Status.DoesNotExist:
-        return JsonResponse({"success": False, "message": "Status not found"}, status=404)
+        todo_list = TodoList.objects.get(id=list_id, user=user)
+        todo_list.delete()
+        return JsonResponse({
+            "success": True,
+            "message": "Todo list deleted successfully"
+        }, status=200)
+    except TodoList.DoesNotExist:
+        return JsonResponse({"success": False, "message": "Todo list not found"}, status=404)
+    except Exception as e:
+        return JsonResponse({"success": False, "message": str(e)}, status=500)
+
+@csrf_exempt
+def add_task(request, list_id):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "message": "Invalid method"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        label = data.get("label")
+
+        if not label:
+            return JsonResponse({"success": False, "message": "Task label is required"}, status=400)
+
+        todo_list = TodoList.objects.get(id=list_id)
+        user_id = request.session.get("user_id")
+        user = User.objects.get(id=user_id)
+
+        task = Task.objects.create(
+            todo_list=todo_list,
+            user=user,
+            label=label,
+            completed=False
+        )
+
+        return JsonResponse({
+            "success": True,
+            "task": {
+                "id": task.id,
+                "label": task.label,
+                "completed": task.completed
+            }
+        }, status=201)
+
+    except TodoList.DoesNotExist:
+        return JsonResponse({"success": False, "message": "Todo list not found"}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "message": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({"success": False, "message": str(e)}, status=500)
+
+
+@csrf_exempt
+def toggle_task(request, task_id):
+    if request.method != "PUT":
+        return JsonResponse({"success": False, "message": "Invalid method"}, status=405)
+
+    try:
+        task = Task.objects.get(id=task_id)
+        task.completed = not task.completed
+        task.save()
+
+        return JsonResponse({
+            "success": True,
+            "task": {
+                "id": task.id,
+                "label": task.label,
+                "completed": task.completed
+            },
+            "new_status": "COMPLETED"
+        })
+    except Task.DoesNotExist:
+        return JsonResponse({"success": False, "message": "Task not found"}, status=404)
+    except Exception as e:
+        return JsonResponse({"success": False, "message": str(e)}, status=500)
+
+
+@csrf_exempt
+def delete_task(request, task_id):
+    if request.method != "DELETE":
+        return JsonResponse({"success": False, "message": "Invalid method"}, status=405)
+
+    try:
+        task = Task.objects.get(id=task_id)
+        task.delete()
+
+        return JsonResponse({
+            "success": True,
+            "message": "Task deleted successfully",
+            "new_status": "ONGOING"
+        })
+    except Task.DoesNotExist:
+        return JsonResponse({"success": False, "message": "Task not found"}, status=404)
     except Exception as e:
         return JsonResponse({"success": False, "message": str(e)}, status=500)
 
