@@ -4,7 +4,6 @@ import os
 from django.db.models import Avg, Prefetch
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import logout
 
@@ -755,6 +754,7 @@ def delete_todo_list(request, list_id):
     except Exception as e:
         return JsonResponse({"success": False, "message": str(e)}, status=500)
 
+
 @csrf_exempt
 def add_task(request, list_id):
     if request.method != "POST":
@@ -767,13 +767,17 @@ def add_task(request, list_id):
         if not label:
             return JsonResponse({"success": False, "message": "Task label is required"}, status=400)
 
-        todo_list = TodoList.objects.get(id=list_id)
         user_id = request.session.get("user_id")
-        user = User.objects.get(id=user_id)
+        if not user_id:
+            return JsonResponse({"success": False, "message": "User not logged in"}, status=401)
+
+        try:
+            todo_list = TodoList.objects.get(id=list_id)
+        except TodoList.DoesNotExist:
+            return JsonResponse({"success": False, "message": "Todo list not found"}, status=404)
 
         task = Task.objects.create(
             todo_list=todo_list,
-            user=user,
             label=label,
             completed=False
         )
@@ -787,10 +791,9 @@ def add_task(request, list_id):
             }
         }, status=201)
 
-    except TodoList.DoesNotExist:
-        return JsonResponse({"success": False, "message": "Todo list not found"}, status=404)
     except json.JSONDecodeError:
         return JsonResponse({"success": False, "message": "Invalid JSON"}, status=400)
+
     except Exception as e:
         return JsonResponse({"success": False, "message": str(e)}, status=500)
 
